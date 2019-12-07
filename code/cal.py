@@ -32,8 +32,8 @@ start = time.time()
 #loading data sets
 
 transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((125.3/255, 123.0/255, 113.9/255), (63.0/255, 62.1/255.0, 66.7/255.0)),
+	transforms.ToTensor(),
+	transforms.Normalize((125.3/255, 123.0/255, 113.9/255), (63.0/255, 62.1/255.0, 66.7/255.0)),
 ])
 
 
@@ -42,9 +42,9 @@ transform = transforms.Compose([
 # loading neural network
 
 # Name of neural networks
-# Densenet trained on CIFAR-10:         densenet10
-# Densenet trained on CIFAR-100:        densenet100
-# Densenet trained on WideResNet-10:    wideresnet10
+# Densenet trained on CIFAR-10:		 densenet10
+# Densenet trained on CIFAR-100:		densenet100
+# Densenet trained on WideResNet-10:	wideresnet10
 # Densenet trained on WideResNet-100:   wideresnet100
 #nnName = "densenet10"
 
@@ -55,37 +55,53 @@ transform = transforms.Compose([
 criterion = nn.CrossEntropyLoss()
 
 
+def recursion_change_bn(module):
+	if isinstance(module, torch.nn.BatchNorm2d):
+		module.track_running_stats = 1
+	else:
+		for i, (name, module_) in enumerate(module._modules.items()):
+			module_ = recursion_change_bn(module_)
+	return module
+
 
 def test(nnName, dataName, CUDA_DEVICE, epsilon, temperature):
-    
-    net1 = torch.load("../models/{}.pth".format(nnName))
-    optimizer1 = optim.SGD(net1.parameters(), lr = 0, momentum = 0)
-    net1.cuda(CUDA_DEVICE)
-    
-    if dataName != "Uniform" and dataName != "Gaussian":
-        testsetout = torchvision.datasets.ImageFolder("../data/{}".format(dataName), transform=transform)
-        testloaderOut = torch.utils.data.DataLoader(testsetout, batch_size=1,
-                                         shuffle=False, num_workers=2)
+	checkpoint = torch.load("../models/{}.pth".format(nnName), map_location = 'cuda')
+	net1 = checkpoint
+	for i, (name, module) in enumerate(net1._modules.items()):
+		module = recursion_change_bn(net1)
+	net1.eval()
 
-    if nnName == "densenet10" or nnName == "wideresnet10": 
-	testset = torchvision.datasets.CIFAR10(root='../data', train=False, download=True, transform=transform)
-	testloaderIn = torch.utils.data.DataLoader(testset, batch_size=1,
-                                         shuffle=False, num_workers=2)
-    if nnName == "densenet100" or nnName == "wideresnet100": 
-	testset = torchvision.datasets.CIFAR100(root='../data', train=False, download=True, transform=transform)
-	testloaderIn = torch.utils.data.DataLoader(testset, batch_size=1,
-                                         shuffle=False, num_workers=2)
-    
-    if dataName == "Gaussian":
-        d.testGaussian(net1, criterion, CUDA_DEVICE, testloaderIn, testloaderIn, nnName, dataName, epsilon, temperature)
-        m.metric(nnName, dataName)
+	
+	torch.save(net1, "../models/{}.pth".format(nnName))
+	net1 = torch.load("../models/{}.pth".format(nnName))
+	
+	optimizer1 = optim.SGD(net1.parameters(), lr = 0, momentum = 0)
+	net1.cuda(CUDA_DEVICE)
+	
+	if dataName != "Uniform" and dataName != "Gaussian":
+		testsetout = torchvision.datasets.ImageFolder("../data/{}".format(dataName), transform=transform)
+		testloaderOut = torch.utils.data.DataLoader(testsetout, batch_size=1,
+										 shuffle=False, num_workers=2)
 
-    elif dataName == "Uniform":
-        d.testUni(net1, criterion, CUDA_DEVICE, testloaderIn, testloaderIn, nnName, dataName, epsilon, temperature)
-        m.metric(nnName, dataName)
-    else:
-	d.testData(net1, criterion, CUDA_DEVICE, testloaderIn, testloaderOut, nnName, dataName, epsilon, temperature) 
-	m.metric(nnName, dataName)
+	if nnName == "densenet10" or nnName == "wideresnet10": 
+		testset = torchvision.datasets.CIFAR10(root='../data', train=False, download=True, transform=transform)
+		testloaderIn = torch.utils.data.DataLoader(testset, batch_size=1,
+										 shuffle=False, num_workers=2)
+	if nnName == "densenet100" or nnName == "wideresnet100": 
+		testset = torchvision.datasets.CIFAR100(root='../data', train=False, download=True, transform=transform)
+		testloaderIn = torch.utils.data.DataLoader(testset, batch_size=1,
+										 shuffle=False, num_workers=2)
+	
+	if dataName == "Gaussian":
+		d.testGaussian(net1, criterion, CUDA_DEVICE, testloaderIn, testloaderIn, nnName, dataName, epsilon, temperature)
+		m.metric(nnName, dataName)
+
+	elif dataName == "Uniform":
+		d.testUni(net1, criterion, CUDA_DEVICE, testloaderIn, testloaderIn, nnName, dataName, epsilon, temperature)
+		m.metric(nnName, dataName)
+	else:
+		d.testData(net1, criterion, CUDA_DEVICE, testloaderIn, testloaderOut, nnName, dataName, epsilon, temperature) 
+		m.metric(nnName, dataName)
 
 
 
